@@ -1,0 +1,19 @@
+# 大型数据文件 (7.4 GB, 超过 GitHub 100MB 限制)
+data/MIT-Stanford Battery Dataset_cleaned.mat
+data/B.docx
+
+# LaTeX 编译产物
+Paper/*.aux
+Paper/*.log
+Paper/*.out
+Paper/*.synctex.gz
+Paper/*.toc
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 系统文件
+.DS_Store
+Thumbs.db
