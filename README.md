@@ -90,7 +90,7 @@ python explain_transformer.py
 python final_figures.py
 ```
 
-> **注意**：本项目为 124 个样本的小规模序列，**CPU 即可完成全部训练**，无需 GPU。脚本 ① 需读取 7.36 GB 原始 .mat，耗时主要在此 I/O。
+> **注意**：训练与推理使用 `ai-cores` conda 环境（torch 2.11+cu128，NVIDIA RTX 5070，CUDA 自动启用）。CPU 也能跑但慢约 10 倍。脚本 ① 需读取 7.36 GB 原始 .mat，耗时主要在此 I/O。
 
 ## 编译论文
 
