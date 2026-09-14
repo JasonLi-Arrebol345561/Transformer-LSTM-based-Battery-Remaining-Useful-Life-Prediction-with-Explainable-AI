@@ -11,8 +11,7 @@ BatteryLife-AI/
 │
 ├── data/                              # 数据文件
 │   ├── MIT-Stanford Battery Dataset_cleaned.mat  # 原始数据 (7.4 GB, HDF5 v7.3)
-│   ├── battery_analysis_results.mat              # 预处理后的分析结果
-│   └── B.docx                                   # 补充文档
+│   └── battery_analysis_results.mat              # 预处理后的分析结果
 │
 ├── code/                              # 代码文件（按执行顺序排列）
 │   ├── common.py                      # 共享模块（路径/加载/顺序校验/特征/模型/种子）
@@ -21,7 +20,7 @@ BatteryLife-AI/
 │   ├── feature_importance.py          # ③ 主效应 + 交互效应（Fisher z 检验）
 │   ├── model_comparison.py            # ④ 四模型公平对比 (Ridge/RF/LSTM/Transformer)
 │   ├── feature_ablation.py            # ⑤ Transformer 特征消融实验
-│   ├── holdout_shap_analysis.py       # ⑥ 留出测试集评估（多次分层划分）
+│   ├── holdout_eval.py                # ⑥ 留出测试集评估（多次分层划分）
 │   ├── explain_transformer.py         # ⑦ Transformer 可解释性（IG/置换/rollout）
 │   └── final_figures.py               # ⑧ 论文终图 (预测散点图 + 汇总表)
 │
@@ -50,7 +49,7 @@ BatteryLife-AI/
 | 依赖 | 版本 |
 |------|------|
 | Python | 3.12 |
-| PyTorch | ≥2.0（CPU 即可） |
+| PyTorch | ≥2.0（CUDA 版实测 2.11） |
 | scikit-learn | ≥1.3 |
 | NumPy | ≥1.24 |
 | SciPy | ≥1.11 |
@@ -82,7 +81,7 @@ python model_comparison.py
 python feature_ablation.py
 
 # ⑥ 留出测试集评估（多次分层划分）
-python holdout_shap_analysis.py
+python holdout_eval.py
 
 # ⑦ Transformer 可解释性（IG / 置换 / rollout，带基线）
 python explain_transformer.py
@@ -106,8 +105,9 @@ xelatex battery_life_prediction.tex   # 第二次以解析交叉引用
 1. **Q₁（阶段切换 SOC）是最关键的可解释策略参数** — Spearman ρ = +0.318（FDR 显著）；但「单次平均充电时间」是更强的主效应（ρ = −0.528）。
 2. **SOC 40–80% 是高倍率充电的"危险区间"** — 40–60% 与 60–80% 区间的 C-rate 与寿命 ρ 分别为 −0.287、−0.330（FDR 显著）；低 SOC 区间不显著。
 3. **交互效应经 Fisher r-to-z 检验**：C₁ × Q₁（|Δρ|=0.824，p≈5e-7）与 Q₁ × C₂（|Δρ|=0.468，p≈0.005）显著，其余交互不显著。
-4. **公平对比**（Ridge/RF 与 LSTM/Transformer 输入同一套原始序列）：Ridge R² = 0.577±0.097（不再为负），Transformer 最优 R² = 0.827±0.092；留出测试集（10 次分层划分）R² = 0.726±0.177。
-5. **可解释性落在 Transformer 本身**（Integrated Gradients / 置换重要性 / 注意力 rollout），并附随机初始化与时间轴打乱基线。
+4. **公平对比**（Ridge/RF 与 LSTM/Transformer 输入同一套原始序列，序列模型跨 5 seed）：Ridge R² = 0.577±0.097（不再为负），Transformer 最优 R² = 0.834±0.067；留出测试集（10 次分层划分）R² = 0.773±0.175、MAPE 18.8%（约为 Severson 2019 同数据集 9.1% 的 2 倍，故不宣称「高精度」）。
+5. **特征消融经配对 Wilcoxon 检验**：仅策略参数（B）增益显著（p≈1.5e-6），SOC 区间倍率（C）无增益（p=0.12），dQ/dV（D）边缘（p=0.08）。
+6. **可解释性落在 Transformer 本身**（Integrated Gradients / 置换重要性 / 注意力 rollout），并附随机初始化与时间轴打乱基线；时间打乱几乎不降 R²，说明模型依赖退化水平而非时序顺序。
 
 ## 数据来源
 

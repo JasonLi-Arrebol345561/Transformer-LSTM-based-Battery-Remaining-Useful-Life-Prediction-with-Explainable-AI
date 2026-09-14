@@ -31,7 +31,7 @@ plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 os.makedirs(C.fig_dir(), exist_ok=True)
 
-g = C.seed_all(C.SEED)
+C.seed_all(C.SEED)
 PositionalEncoding, TransformerPredictor, LSTMPredictor = C.build_models()
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -47,6 +47,8 @@ all_y_true, all_y_pred = [], []
 for fold, (tr, va) in enumerate(kf.split(X_seq)):
     X_tr, X_val = X_seq[tr], X_seq[va]
     y_tr, y_val = y_life[tr], y_life[va]
+    torch.manual_seed(C.SEED * 1000 + fold)
+    g = C.fold_generator(C.SEED, fold)
     X_tr_s, X_val_s = C.standardize_sequences(X_tr, X_val)
     y_mean, y_std = y_tr.mean(), y_tr.std()
     tr_ds = TensorDataset(torch.FloatTensor(X_tr_s), torch.FloatTensor((y_tr - y_mean) / y_std))
@@ -93,25 +95,31 @@ print('=' * 60)
 
 mc = C.load_metrics('model_comparison')
 if mc:
-    print('\n表2: 模型对比（5 折交叉验证均值 ± 标准差）')
-    print(f'{"模型":<15} {"MAE":>16} {"RMSE":>16} {"R²":>18}')
-    print('-' * 65)
-    for name in ['Ridge', 'RF', 'LSTM', 'Transformer']:
+    print('\n表2: 模型对比（5 折交叉验证均值 ± 标准差，序列模型跨多 seed）')
+    print(f'{"模型":<14} {"MAE":>13} {"RMSE":>13} {"R²":>15} {"MAPE(%)":>13}')
+    print('-' * 70)
+    for name in ['Dummy(mean)', 'Ridge', 'RF', 'LSTM', 'Transformer']:
         r = mc['results'][name]
-        print(f'{name:<15} {r["MAE"]["mean"]:>7.0f}±{r["MAE"]["std"]:.0f}  '
-              f'{r["RMSE"]["mean"]:>7.0f}±{r["RMSE"]["std"]:.0f}  '
-              f'{r["R2"]["mean"]:>8.3f}±{r["R2"]["std"]:.3f}')
+        print(f'{name:<14} {r["MAE"]["mean"]:>6.0f}±{r["MAE"]["std"]:.0f} '
+              f'{r["RMSE"]["mean"]:>6.0f}±{r["RMSE"]["std"]:.0f} '
+              f'{r["R2"]["mean"]:>8.3f}±{r["R2"]["std"]:.3f} '
+              f'{r["MAPE"]["mean"]:>7.1f}±{r["MAPE"]["std"]:.1f}')
 
 fa = C.load_metrics('feature_ablation')
 if fa:
-    print('\n表3: 特征消融实验（Transformer, 5 折交叉验证）')
-    print(f'{"阶段":<16} {"维度":<5} {"R²":<18} {"ΔR²":<8}')
-    print('-' * 50)
+    print('\n表3: 特征消融实验（Transformer, 多 seed 5 折，逐层 Wilcoxon 检验）')
+    print(f'{"阶段":<16} {"维度":<5} {"R²":<18} {"ΔR²(中位)":<12} {"Wilcoxon p":<12}')
+    print('-' * 68)
     stages = fa['stages']
     deltas = fa['deltas']
     for k in ['A (基础退化)', 'B (+策略)', 'C (+SOC暴露)', 'D (+dQ/dV)']:
         r = stages[k]['R2']
-        print(f'{k:<16} {stages[k]["dim"]:<5} {r["mean"]:.3f}±{r["std"]:.3f}   +{deltas[k]:.3f}')
+        if deltas[k] is None:
+            print(f'{k:<16} {stages[k]["dim"]:<5} {r["mean"]:.3f}±{r["std"]:.3f}  {"—":<12} {"—":<12}')
+        else:
+            d = deltas[k]
+            print(f'{k:<16} {stages[k]["dim"]:<5} {r["mean"]:.3f}±{r["std"]:.3f}  '
+                  f'{d["delta_median"]:>+.3f}       {d["wilcoxon_p"]:<12.3g}')
 
 ho = C.load_metrics('holdout')
 if ho:
@@ -122,5 +130,7 @@ if ho:
     print(f'  R²       = {ho["R2"]["mean"]:.3f} ± {ho["R2"]["std"]:.3f}')
     print(f'  MAE      = {ho["MAE"]["mean"]:.0f} ± {ho["MAE"]["std"]:.0f} cycles')
     print(f'  RMSE     = {ho["RMSE"]["mean"]:.0f} ± {ho["RMSE"]["std"]:.0f} cycles')
+    if 'MAPE' in ho:
+        print(f'  MAPE     = {ho["MAPE"]["mean"]:.1f} ± {ho["MAPE"]["std"]:.1f} %')
 
 print('\n全部完成!')

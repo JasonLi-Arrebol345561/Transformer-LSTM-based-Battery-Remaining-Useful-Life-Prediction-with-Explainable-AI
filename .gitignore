@@ -17,6 +17,7 @@ __pycache__/
 # 虚拟环境与安装日志
 .venv/
 .pip_install.log
+*.log
 
 # IDE 配置
 .vscode/

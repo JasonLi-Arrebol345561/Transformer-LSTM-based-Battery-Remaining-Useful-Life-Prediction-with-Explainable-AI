@@ -53,7 +53,7 @@
 % ============================================================
 \begin{abstract}
 \noindent
-快充策略对锂离子电池循环寿命的影响机制是电池管理系统优化的核心问题。本文基于MIT-Stanford 124颗A123 LFP 18650电池的快充老化数据集，构建\textbf{统计分析—机器学习预测—可解释性验证}的完整研究闭环，任务定义为\textbf{早期循环寿命预测}（用前100个循环预测总寿命）。在统计层面，采用Spearman秩相关、分层交互分析（Fisher r-to-z检验）与Benjamini-Hochberg FDR校正，量化充电策略参数（C1、Q1、C2）及各SOC区间倍率暴露对循环寿命的主效应与交互效应，发现Q1（阶段切换SOC）是显著的主效应与交互枢纽变量，C1$\times$Q1交互经检验显著（$|\Delta\rho|=0.824$，$p\approx5\times10^{-7}$）。在预测层面，采用四层渐进式特征体系与Transformer架构，在公平对比下（Ridge/RF与LSTM/Transformer输入同一套原始序列）5折交叉验证R$^2$达0.827，留出测试集（10次分层划分）R$^2$为$0.726\pm0.177$。在可解释层面，对Transformer本身采用Integrated Gradients、置换重要性与注意力rollout，并附随机初始化与时间轴打乱基线，验证内阻、充电时间与Q1的关键作用。三层分析共同揭示快充策略优化方向：低SOC区间集中高倍率充电、高SOC区间降倍率、保持两步倍率平滑过渡。
+快充策略对锂离子电池循环寿命的影响机制是电池管理系统优化的核心问题。本文基于MIT-Stanford 124颗A123 LFP 18650电池的快充老化数据集，构建\textbf{统计分析—机器学习预测—可解释性验证}的完整研究闭环，任务定义为\textbf{早期循环寿命预测}（用前100个循环预测总寿命）。在统计层面，采用Spearman秩相关、分层交互分析（Fisher r-to-z检验）与Benjamini-Hochberg FDR校正，量化充电策略参数（C1、Q1、C2）及各SOC区间倍率暴露对循环寿命的主效应与交互效应，发现Q1（阶段切换SOC）是显著的主效应与交互枢纽变量，C1$\times$Q1交互经检验显著（$|\Delta\rho|=0.824$，$p\approx5\times10^{-7}$）。在预测层面，采用四层渐进式特征体系与Transformer架构，在公平对比下（Ridge/RF与LSTM/Transformer输入同一套原始序列）5折交叉验证R$^2$达0.827，留出测试集（10次分层划分）R$^2$为$0.726\pm0.177$。在可解释层面，对Transformer本身采用Integrated Gradients、置换重要性与注意力rollout，并附随机初始化与时间轴打乱基线，IG归因最强的动态特征是内阻（IR），SOC区间倍率与策略参数（C1/C2）排名靠前。三层分析共同揭示与数据一致的快充设计方向：低SOC区间集中高倍率充电、高SOC区间降倍率、保持两步倍率平滑过渡。
 
 \medskip
 \noindent\textbf{关键词：}锂离子电池；早期循环寿命预测；快充策略；Transformer；Spearman相关；Fisher z检验；Integrated Gradients
@@ -78,8 +78,8 @@ Severson等人\cite{severson2019}在Nature Energy上发表了基于124颗A123 LF
 
 \begin{enumerate}[label=(\arabic*), leftmargin=*]
     \item \textbf{统计层面}：运用Spearman秩相关分析与分层交互分析，量化充电策略参数及各SOC区间倍率暴露量对循环寿命的主效应与交互效应；
-    \item \textbf{预测层面}：设计四层渐进式特征体系，基于Transformer架构实现高精度循环寿命预测，并与Ridge回归、随机森林、LSTM等基线模型进行系统对比；
-    \item \textbf{可解释层面}：综合运用SHAP值和Transformer注意力权重，揭示模型预测的决策依据，验证与统计分析的结论一致性。
+    \item \textbf{预测层面}：设计四层渐进式特征体系，基于Transformer架构实现循环寿命预测，并与Ridge回归、随机森林、LSTM等基线模型及朴素基线进行系统对比；
+    \item \textbf{可解释层面}：综合运用Integrated Gradients、置换重要性与注意力rollout，揭示模型预测的决策依据，验证与统计分析的结论一致性。
 \end{enumerate}
 
 % ============================================================
@@ -132,7 +132,7 @@ Severson等人\cite{severson2019}在Nature Energy上发表了基于124颗A123 LF
 \toprule
 \textbf{指标} & \textbf{最小值} & \textbf{最大值} & \textbf{中位数} & \textbf{均值} \\
 \midrule
-循环寿命 (cycles) & 170 & 2236 & 750 & 817.7 \\
+循环寿命 (cycles) & 148 & 2237 & 750 & 809.2 \\
 总充电时间 (h)    & 2128.1 & 31438.0 & 8234.7 & 9128.3 \\
 \bottomrule
 \end{tabularx}
@@ -162,11 +162,11 @@ Severson等人\cite{severson2019}在Nature Energy上发表了基于124颗A123 LF
 \toprule
 \textbf{策略} & $C_1$ (C) & $Q_1$ (\%) & $C_2$ (C) & \textbf{平均寿命} & \textbf{电池数} \\
 \midrule
-3.6C(80\%)-3.6C          & 3.6 & 80 & 3.6 & 2082 & 3 \\
-4C(80\%)-4C              & 4.0 & 80 & 4.0 & 1570 & 2 \\
-4.8C(80\%)-4.8C-newstructure & 4.8 & 80 & 4.8 & 1548 & 5 \\
-5C(67\%)-4C-newstructure & 5.0 & 67 & 4.0 & 1115 & 6 \\
-5.3C(54\%)-4C-newstructure & 5.3 & 54 & 4.0 & 1073 & 8 \\
+3.6C(80\%)-3.6C          & 3.6 & 80 & 3.6 & 2083 & 3 \\
+4C(80\%)-4C              & 4.0 & 80 & 4.0 & 1572 & 2 \\
+4.8C(80\%)-4.8C-newstructure & 4.8 & 80 & 4.8 & 1549 & 5 \\
+5C(67\%)-4C-newstructure & 5.0 & 67 & 4.0 & 1116 & 6 \\
+5.3C(54\%)-4C-newstructure & 5.3 & 54 & 4.0 & 1074 & 8 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -179,11 +179,11 @@ Severson等人\cite{severson2019}在Nature Energy上发表了基于124颗A123 LF
 \toprule
 \textbf{策略} & $C_1$ (C) & $Q_1$ (\%) & $C_2$ (C) & \textbf{平均寿命} & \textbf{电池数} \\
 \midrule
-5.6C(65\%)-3C    & 5.6 & 65 & 3.0 & 452 & 1 \\
-6C(52\%)-3.5C    & 6.0 & 52 & 3.5 & 449 & 1 \\
-2C(7\%)-5.5C     & 2.0 & 7  & 5.5 & 361 & 1 \\
-1C(4\%)-6C       & 1.0 & 4  & 6.0 & 326 & 1 \\
-2C(10\%)-6C      & 2.0 & 10 & 6.0 & 170 & 1 \\
+5.6C(65\%)-3C    & 5.6 & 65 & 3.0 & 429 & 1 \\
+6C(52\%)-3.5C    & 6.0 & 52 & 3.5 & 429 & 1 \\
+2C(7\%)-5.5C     & 2.0 & 7  & 5.5 & 335 & 1 \\
+1C(4\%)-6C       & 1.0 & 4  & 6.0 & 300 & 1 \\
+2C(10\%)-6C      & 2.0 & 10 & 6.0 & 148 & 1 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -287,9 +287,9 @@ $|C_1-C_2|$ 倍率跳变 & \textbf{--0.213} & 0.018 & \textbf{显著} \\
 \end{figure}
 
 % ============================================================
-% 5. 交互效应与综合排序
+% 5. 交互效应
 % ============================================================
-\section{交互效应与综合排序}
+\section{交互效应}
 
 \subsection{分层Spearman交互分析}
 
@@ -401,14 +401,14 @@ $\downarrow$ \\
 \subsection{实验设计}
 
 \begin{itemize}[leftmargin=*]
-    \item \textbf{模型对比（Phase 1）}：固定Feature~B（9维），比较Ridge回归、随机森林（n=200, max\_depth=8）、LSTM（2层, hidden=64）和Transformer（2层, d\_model=64）。LSTM/Transformer使用原始时序输入$(100\times9)$，Ridge/RF使用时序聚合特征（mean/std/min/max/slope $\to 33$维）。5折交叉验证，固定random\_state=42。
-    \item \textbf{特征消融（Phase 2）}：固定Transformer，逐层叠加A$\to$B$\to$C$\to$D。5折交叉验证，报告每层R$^2$增量。
-    \item \textbf{留出测试集（Phase 3）}：按cycle\_life分层抽样104/10/10（train/val/test），最终报告Test MAE/RMSE/R$^2$。
+    \item \textbf{模型对比（Phase 1，公平对比）}：固定Feature~B（9维），比较Ridge回归、随机森林（n=200, max\_depth=8）、LSTM（2层, hidden=64）和Transformer（2层, d\_model=64）。Ridge/RF与LSTM/Transformer输入同一套前100循环原始特征——Ridge/RF用展平的$(100\times9=900)$维向量，LSTM/Transformer用$(100\times9)$时序，避免信息量不对等。5折交叉验证，固定seed。
+    \item \textbf{特征消融（Phase 2）}：固定Transformer，逐层叠加A$\to$B$\to$C$\to$D。5折交叉验证，多个seed，逐层对比用配对Wilcoxon检验判断R$^2$增量是否显著。
+    \item \textbf{留出测试集（Phase 3）}：按cycle\_life分位数分层，约80/10/10（train/val/test），重复10次不同划分，报告Test R$^2$/MAE/RMSE的均值$\pm$标准差。
 \end{itemize}
 
 \subsection{软件环境}
 
-Python 3.12, PyTorch 2.14 (CPU), scikit-learn, scipy, h5py。训练在CPU上完成（124样本的小规模序列）。
+Python 3.12, torch$\geq$2.0（实测 2.11, CUDA 12.8）, scikit-learn, scipy, h5py。训练在NVIDIA RTX 5070 GPU上完成。
 
 % ============================================================
 % 7. 预测结果
@@ -423,19 +423,20 @@ Python 3.12, PyTorch 2.14 (CPU), scikit-learn, scipy, h5py。训练在CPU上完�
 \centering
 \caption{模型对比结果（5折交叉验证，Feature B）}
 \label{tab:model_comparison}
-\begin{tabularx}{\textwidth}{cCCC}
+\begin{tabularx}{\textwidth}{cCCCC}
 \toprule
-\textbf{模型} & \textbf{MAE} & \textbf{RMSE} & \textbf{R$^2$} \\
+\textbf{模型} & \textbf{MAE} & \textbf{RMSE} & \textbf{R$^2$} & \textbf{MAPE} \\
 \midrule
-Ridge (展平序列900维)      & 178$\pm$31 & 236$\pm$50 & 0.577$\pm$0.097 \\
-随机森林 (展平序列900维)    & 157$\pm$26 & 237$\pm$44 & 0.560$\pm$0.163 \\
-LSTM             & 116$\pm$35 & 160$\pm$41 & 0.771$\pm$0.178 \\
-\textbf{Transformer} & \textbf{110$\pm$24} & \textbf{146$\pm$32} & \textbf{0.827$\pm$0.092} \\
+Dummy(预测均值)   & 283$\pm$18 & 380$\pm$70 & $-$0.076$\pm$0.096 & 41.5\% \\
+Ridge (展平序列900维) & 178$\pm$31 & 236$\pm$50 & 0.577$\pm$0.097 & 23.6\% \\
+随机森林 (展平序列900维) & 157$\pm$26 & 237$\pm$44 & 0.560$\pm$0.163 & 20.4\% \\
+LSTM             & 116$\pm$32 & 154$\pm$36 & 0.798$\pm$0.137 & 15.8\% \\
+\textbf{Transformer} & \textbf{109$\pm$23} & \textbf{145$\pm$29} & \textbf{0.834$\pm$0.067} & \textbf{14.5\%} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-在公平对比（所有模型输入同一套前100循环原始序列）下，Ridge达到R$^2$=0.577——说明原先``Ridge R$^2=-0.09$''是让线性模型吃手工聚合特征所致的不公平对比，而非线性模型本身失败。Transformer仍最优（R$^2$=0.827），但优势幅度（相对Ridge约+0.25）比此前宣称的要温和。LSTM（0.771）介于随机森林与Transformer之间，方差较大。
+在公平对比（所有模型输入同一套前100循环原始序列，序列模型跨5个seed）下，Ridge达到R$^2$=0.577——说明原先``Ridge R$^2=-0.09$''是让线性模型吃手工聚合特征所致的不公平对比，而非线性模型本身失败。Transformer最优（R$^2$=0.834，5个seed高度一致），但优势幅度（相对Ridge约+0.26）比此前宣称的要温和。朴素基线（预测均值）R$^2\approx0$、MAPE 41.5\%，说明模型确实学到退化信号而非仅靠均值。
 
 \subsection{特征消融实验}
 
@@ -445,14 +446,14 @@ LSTM             & 116$\pm$35 & 160$\pm$41 & 0.771$\pm$0.178 \\
 \centering
 \caption{特征消融实验结果（Transformer, 5折交叉验证）}
 \label{tab:ablation}
-\begin{tabularx}{\textwidth}{cCCc}
+\begin{tabularx}{\textwidth}{cCCccc}
 \toprule
-\textbf{特征层} & \textbf{维度} & \textbf{R$^2$} & \textbf{$\Delta$R$^2$} \\
+\textbf{特征层} & \textbf{维度} & \textbf{R$^2$} & \textbf{$\Delta$R$^2$(中位)} & \textbf{Wilcoxon p} & \textbf{结论} \\
 \midrule
-A (基础退化)     & 6  & 0.758$\pm$0.096 & ---    \\
-B (+策略参数)    & 9  & 0.870$\pm$0.041 & +0.112 \\
-C (+SOC暴露)    & 13 & 0.861$\pm$0.041 & $-$0.010 \\
-D (+dQ/dV)      & 18 & 0.881$\pm$0.075 & +0.020 \\
+A (基础退化)     & 6  & 0.730$\pm$0.108 & --- & --- & 基线 \\
+B (+策略参数)    & 9  & 0.835$\pm$0.068 & +0.103 & $1.5\times10^{-6}$ & 显著 \\
+C (+SOC暴露)    & 13 & 0.859$\pm$0.028 & +0.007 & 0.12 & 不显著 \\
+D (+dQ/dV)      & 18 & 0.880$\pm$0.067 & +0.032 & 0.080 & 不显著 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -464,7 +465,7 @@ D (+dQ/dV)      & 18 & 0.881$\pm$0.075 & +0.020 \\
 \label{fig:ablation}
 \end{figure}
 
-策略参数（B，+0.112）是最大正向增量；dQ/dV统计量（D，+0.020）有温和增益。\textbf{SOC区间倍率暴露（C）无增益（$\Delta$R$^2$=$-$0.010）}——这与它们由C1/Q1/C2确定性推导、高度共线的判断一致，印证了``40--80\%危险区间''与``Q1重要''部分是同一条信息的两种表述。
+用配对Wilcoxon检验（对同一(seed, fold)的R$^2$逐对比较）后，\textbf{只有策略参数（B）带来显著增益}（$\Delta$R$^2$中位+0.103，$p\approx1.5\times10^{-6}$）。\textbf{SOC区间倍率暴露（C）无显著增益}（$p=0.12$）——这与它们由C1/Q1/C2确定性推导、高度共线的判断一致，印证``40--80\%危险区间''与``Q1重要''部分是同一条信息的两种表述。dQ/dV（D）为边缘（$p=0.080$），不足以宣称确定增益。
 
 \subsection{留出测试集性能}
 
@@ -478,9 +479,10 @@ D (+dQ/dV)      & 18 & 0.881$\pm$0.075 & +0.020 \\
 \toprule
 \textbf{指标} & \textbf{数值} \\
 \midrule
-Test MAE  & 143$\pm$46 cycles \\
-Test RMSE & 201$\pm$75 cycles \\
-\textbf{Test R$^2$} & \textbf{0.726$\pm$0.177} \\
+Test MAE  & 130$\pm$31 cycles \\
+Test RMSE & 176$\pm$56 cycles \\
+\textbf{Test R$^2$} & \textbf{0.773$\pm$0.175} \\
+Test MAPE & 18.8$\pm$7.2\% \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -492,7 +494,25 @@ Test RMSE & 201$\pm$75 cycles \\
 \label{fig:pred}
 \end{figure}
 
-10次分层留出的R$^2$均值0.726，但标准差高达0.177——说明单次划分的R$^2$（如原报告的0.878）置信区间很宽，不足以支撑``显著优于''的结论。模型对未见电池有中等泛化能力，但受测试集划分影响较大。
+10次分层留出的R$^2$均值0.773，标准差0.175——说明单次划分的R$^2$置信区间很宽，不足以支撑``显著优于''的结论。模型对未见电池有中等泛化能力，但受测试集划分影响较大。
+
+\subsection{与已发表基线的定位}
+
+\begin{table}[H]
+\centering
+\caption{本文与已发表方法的预测误差对比（同一数据集）}
+\label{tab:baseline}
+\begin{tabularx}{\textwidth}{cCc}
+\toprule
+\textbf{方法} & \textbf{数据} & \textbf{测试误差 (MAPE)} \\
+\midrule
+Severson et al.\ 2019（Full模型，前100循环）\cite{severson2019} & 同数据集124颗LFP & 约9.1\%（Full模型约7.5\%） \\
+\textbf{本文（Transformer，留出测试集）} & 同数据集 & \textbf{18.8$\pm$7.2\%} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+本文在同一数据集上的留出测试MAPE（18.8\%）约为Severson 2019已发表方法（9.1\%）的2倍。因此本文的贡献在于\textbf{方法流程与可解释性}（公平对比、显著性检验、落在主模型上的归因），而\textbf{不在预测精度上领先}——论文措辞据此降级，不再自称``高精度模型''。
 
 % ============================================================
 % 8. 可解释性分析
@@ -517,7 +537,7 @@ Test RMSE & 201$\pm$75 cycles \\
 \label{fig:perm}
 \end{figure}
 
-IG归因最强的动态特征是内阻（IR）；SOC区间倍率（Crate\_*）与策略参数（C1/C2）在IG与置换重要性中排名靠前。注意：置换重要性高反映模型``依赖''该特征，并不等价于对泛化有益——消融已显示SOC区间特征无R$^2$增益（与C1/Q1/C2共线）。逐特征归因值见\texttt{results/metrics.json}。
+IG归因最强的动态特征是内阻（IR）；SOC区间倍率（Crate\_*）与策略参数（C1/C2）在IG与置换重要性中排名靠前。注意：置换重要性高反映模型``依赖''该特征，并不等价于对泛化有益——消融已显示SOC区间特征无R$^2$增益（与C1/Q1/C2共线）。\textbf{故以IG与消融一致的特征（IR、策略参数）作为主结论}；置换重要性采用固定seed多次打乱取均值以降低方差。逐特征归因值见\texttt{results/metrics.json}。
 
 \subsection{注意力rollout与基线对照}
 
@@ -537,7 +557,7 @@ IG归因最强的动态特征是内阻（IR）；SOC区间倍率（Crate\_*）�
 \label{fig:attention_profile}
 \end{figure}
 
-训练模型的rollout模式与随机初始化基线明显不同，说明注意力学到了非平凡结构。\textbf{时间轴打乱对照}：打乱100个时间步后重训，测试R$^2$从0.741降至0.709（仅下降0.03），说明模型主要依赖退化``水平''信息（SOH/IR当前值）而非严格的时间顺序——因此不宜过度解读``Transformer捕捉长程时序依赖''的叙事。
+训练模型的rollout模式与随机初始化基线明显不同，说明注意力学到了非平凡结构。\textbf{时间轴打乱对照}：打乱100个时间步后重训，测试R$^2$从0.853降至0.846（仅下降0.007），说明模型几乎完全依赖退化``水平''信息（SOH/IR当前值）而非严格的时间顺序——因此不宜解读为``Transformer捕捉长程时序依赖''，其优势主要来自对多变量水平的非线性组合。
 
 % ============================================================
 % 9. 讨论
@@ -564,13 +584,13 @@ $\downarrow$ \\
 
 三层面分析结果高度一致：统计层面发现$Q_1$、$C_2$和SOC区间倍率是关键变量，预测层面特征消融验证了策略参数与dQ/dV的增量贡献（并揭示SOC区间特征无增益），可解释层面确认了相同特征在模型决策中的重要性。
 
-\subsection{快充策略优化建议}
+\subsection{与数据一致的设计方向}
 
-基于以上分析，提出快充策略优化方向：
+基于以上分析，提出与数据一致的设计方向（注意：以下为观测相关性，非因果结论）：
 
 \begin{enumerate}[label=(\arabic*), leftmargin=*]
     \item \textbf{SOC 0--40\% 区间集中高倍率充电}：该区间负极锂离子扩散快、析锂风险小，可安全承受较大电流；
-    \item \textbf{SOC 40--80\% 区间降低倍率}：该区间为``危险区间''，高倍率充电导致不可逆损伤。Spearman分析表明该区间C-rate与寿命负相关性最强（$\rho=-0.330$）；
+    \item \textbf{SOC 40--80\% 区间降低倍率}：该区间为``危险区间''，高倍率充电与较短寿命相关。Spearman分析表明该区间C-rate与寿命负相关性最强（$\rho=-0.330$）；
     \item \textbf{保持两步倍率平滑过渡}：避免$C_1$与$C_2$之间的大幅跳变（$>1.5$C），以减少电极/电解液界面的浓度梯度冲击；
     \item \textbf{在低$C_1$前提下提高$Q_1$}：$C_1 \times Q_1$交互效应（$|\Delta\rho|=0.824$，Fisher z检验$p\approx5\times10^{-7}$）表明，高$Q_1$的保护效应仅存在于低$C_1$条件下。
 \end{enumerate}
@@ -579,6 +599,7 @@ $\downarrow$ \\
 
 \begin{enumerate}[label=(\arabic*), leftmargin=*]
     \item \textbf{样本不均衡}：短寿策略各仅有1颗电池，统计代表性有限。Top 5短寿策略的结论需更多独立重复实验验证；
+    \item \textbf{批次混杂与敏感性检验}：SOC区间倍率暴露是$(C_1,Q_1,C_2)$的确定性函数，各区间的$\rho$是同一组变量的再编码，并非独立证据。本数据集的\texttt{channel\_id}/\texttt{barcode}字段在cleaned版本中已被清空（全为\texttt{0xDD000000}删除标记），无法直接按批次控制；仅能用policy的\texttt{-newstructure}后缀做粗略2组代理。\textbf{批内敏感性检验}：$Q_1$与寿命的相关在两组内均稳健（newstructure组$\rho=0.448$，无后缀组$\rho=0.353$，均与总体$\rho=0.318$同向且显著），说明$Q_1$的效应不太可能纯粹来自这一批次代理，但仍不能排除其他未观测批次混杂，故不作因果解读；
     \item \textbf{单一电池化学}：数据集仅包含A123 LFP/石墨体系，结论向NMC、NCA等其他化学体系的推广需谨慎；
     \item \textbf{实验室条件}：所有电池在恒温条件下测试，未考虑实际使用中的温度波动、部分充放电等复杂工况；
     \item \textbf{特征维度有限}：仅使用前100个循环的特征，更长的早期观测窗口可能进一步提升预测精度。
@@ -595,11 +616,11 @@ $\downarrow$ \\
     \item \textbf{$Q_1$（阶段切换SOC）是最关键的可解释策略参数}。Spearman $\rho = +0.318$（FDR显著），且是经Fisher z检验显著的交互效应（$C_1\times Q_1$、$Q_1\times C_2$）的枢纽变量；
     \item \textbf{SOC 40--80\% 是高倍率充电的``危险区间''}。该区间C-rate暴露量与循环寿命的Spearman $\rho$达--0.330（$p<0.001$），而SOC 0--20\%几乎无影响（$\rho=+0.085, n.s.$）；
     \item \textbf{交互效应经检验而非仅凭强度排序}。Fisher r-to-z检验确认$C_1\times Q_1$（$|\Delta\rho|=0.824$）与$Q_1\times C_2$（$|\Delta\rho|=0.468$）显著，其余候选交互不显著——最优策略是在\textbf{低$C_1$ + 高$Q_1$ + $C_1 \approx C_2$}的组合下实现协同保护；
-    \item \textbf{Transformer在公平对比下表现最优}。四层渐进式特征体系下，5折交叉验证R$^2$达0.827（Ridge公平对比0.577），留出测试集（10次分层划分）R$^2$为$0.726\pm0.177$；
+    \item \textbf{Transformer在公平对比下表现最优，但精度不领先于已发表方法}。四层渐进式特征体系下，5折交叉验证R$^2$达0.834（Ridge公平对比0.577），留出测试集（10次分层划分）R$^2$为$0.773\pm0.175$、MAPE 18.8\%（约为Severson 2019的2倍）；
     \item \textbf{IG/置换/rollout分析落在主模型本身}。IG归因最强的动态特征是内阻（IR），SOC区间倍率与策略参数（C1/C2）排名靠前；时间轴打乱对照提示模型主要依赖退化水平信息而非严格时序顺序。
 \end{enumerate}
 
-本研究不仅提供了高精度的电池寿命预测模型，更重要的是通过多维度的统计分析揭示了快充策略参数之间的复杂交互机制，为快充协议的优化设计提供了明确的物理指导。
+本研究提供了流程完整的电池寿命预测方法，更重要的是通过多维度的统计分析揭示了快充策略参数之间的复杂交互机制，为快充协议的设计提供了与数据一致的物理指导；其贡献在于方法流程与可解释性，而非在预测精度上领先于已发表基线。
 
 % ============================================================
 % 参考文献

@@ -4,7 +4,7 @@
 共享模块 — 路径 / 数据加载(含顺序校验) / 特征构建 / 模型 / 训练 / metrics
 =============================================================================
   本模块是下游所有脚本（model_comparison / feature_ablation /
-  holdout_shap_analysis / final_figures / explain_transformer）的单一正确来源，
+  holdout_eval / final_figures / explain_transformer）的单一正确来源，
   消除原先三处重复的特征读取逻辑，并把关键修正（顺序校验、宽度加权 SOC C-rate、
   固定随机种子、真实 cycle_life 标签）统一收敛到这里。
 
@@ -88,6 +88,7 @@ def parse_policy(policy_str):
 # 随机种子（含 torch，保证 LSTM/Transformer 可复现）
 # ============================================================
 def seed_all(seed=SEED):
+    """设置全局随机种子（random/numpy/torch）。不返回共享 generator（见 fold_generator）。"""
     random.seed(seed)
     np.random.seed(seed)
     try:
@@ -95,10 +96,28 @@ def seed_all(seed=SEED):
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
-        # 固定 DataLoader 使用的生成器
-        return torch.Generator().manual_seed(seed)
     except ImportError:
-        return None
+        pass
+
+
+def fold_generator(seed=SEED, fold=0, tag=0):
+    """
+    为单个 (fold, tag) 训练返回一个独立、可复现的 DataLoader generator。
+
+    修复：原先 seed_all 返回一个全局共享的 torch.Generator，被前一个模型/折
+    持续消耗后，后一个模型/折的 DataLoader 洗牌序列会漂移，导致同一配置在不同
+    脚本里结果不一致（如 Transformer+B 在 model_comparison 得 0.827、在
+    feature_ablation 得 0.870）。改为每折独立、由 (seed, fold, tag) 确定的种子。
+    """
+    import torch
+    return torch.Generator().manual_seed(seed * 1000 + fold * 100 + tag)
+
+
+def mape(y_true, y_pred):
+    """平均绝对百分比误差（%）。y_true 不应含 0。"""
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    return float(np.mean(np.abs((y_true - y_pred) / y_true)) * 100.0)
 
 
 # ============================================================

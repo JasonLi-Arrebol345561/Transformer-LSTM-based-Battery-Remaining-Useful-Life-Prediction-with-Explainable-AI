@@ -38,7 +38,7 @@ import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
-g = C.seed_all(C.SEED)
+C.seed_all(C.SEED)
 PositionalEncoding, TransformerPredictor, LSTMPredictor = C.build_models()
 
 FEAT_NAMES = ['SOH', 'IR', 'Tavg', 'QCharge', 'QDischarge', 'charge_time',
@@ -80,6 +80,8 @@ X_te_s = C.standardize_sequences(X_tr, X_te)[1]
 x_mean, x_std = X_tr.mean(axis=(0, 1), keepdims=True), X_tr.std(axis=(0, 1), keepdims=True)
 y_mean, y_std = y_tr.mean(), y_tr.std()
 
+torch.manual_seed(C.SEED * 1000)
+g = C.fold_generator(C.SEED, 0)
 tr_ds = TensorDataset(torch.FloatTensor(X_tr_s), torch.FloatTensor((y_tr - y_mean) / y_std))
 va_ds = TensorDataset(torch.FloatTensor(X_val_s), torch.FloatTensor((y_val - y_mean) / y_std))
 tr_dl = DataLoader(tr_ds, batch_size=16, shuffle=True, generator=g)
@@ -131,7 +133,7 @@ ig_feat = ig_abs.mean(axis=(0, 1))           # 特征重要性：平均 |IG|
 ig_time = ig_abs.mean(axis=(0, 2))           # 时间步贡献分布
 
 # 随机初始化基线
-rand_model = TransformerPredictor(input_dim=D)
+rand_model = TransformerPredictor(input_dim=D).to(device)
 ig_rand = []
 for i in range(X_te_t.shape[0]):
     ig = integrated_gradients(rand_model, X_te_t[i:i + 1], baseline[i:i + 1]).cpu().numpy()
@@ -152,15 +154,17 @@ print(f'  {C.fig_dir()}/ig_importance.png')
 # ============================================================
 # 3. 置换重要性（逐特征打乱 → 测试 R² 下降）
 # ============================================================
-print('计算置换重要性 ...')
+print('计算置换重要性（固定 seed 多次打乱取均值） ...')
 perm_imp = np.zeros(D)
 base_pred = predict(model, X_te_s)
 base_r2 = r2_score(y_te, base_pred)
+N_PERM = 10
 for d in range(D):
     drops = []
-    for _ in range(5):
+    for r in range(N_PERM):
+        rng = np.random.RandomState(C.SEED * 1000 + d * 100 + r)  # 固定 seed，可复现
         Xp = X_te_s.copy()
-        perm = np.random.permutation(len(Xp))
+        perm = rng.permutation(len(Xp))
         Xp[:, :, d] = X_te_s[perm, :, d]
         drops.append(base_r2 - r2_score(y_te, predict(model, Xp)))
     perm_imp[d] = np.mean(drops)
@@ -227,9 +231,11 @@ for i in range(N):
     X_shuf[i] = X_seq[i][p]
 
 X_shuf_tr_s, X_shuf_val_s = C.standardize_sequences(X_shuf[tr], X_shuf[va])
+torch.manual_seed(C.SEED * 1000 + 1)
+g2 = C.fold_generator(C.SEED, 1)
 tr_ds2 = TensorDataset(torch.FloatTensor(X_shuf_tr_s), torch.FloatTensor((y_tr - y_mean) / y_std))
 va_ds2 = TensorDataset(torch.FloatTensor(X_shuf_val_s), torch.FloatTensor((y_val - y_mean) / y_std))
-tr_dl2 = DataLoader(tr_ds2, batch_size=16, shuffle=True, generator=g)
+tr_dl2 = DataLoader(tr_ds2, batch_size=16, shuffle=True, generator=g2)
 va_dl2 = DataLoader(va_ds2, batch_size=64)
 model_shuf = TransformerPredictor(input_dim=D)
 model_shuf = C.train_model(model_shuf, tr_dl2, va_dl2, epochs=200, lr=5e-4, device=device)

@@ -3,14 +3,14 @@
 =============================================================================
 留出测试集评估 — 多次重复分层划分（Transformer, Feature D）
 =============================================================================
-  评估协议（修正原先「单次 12 电池、硬编码 0.878」）：
+  评估协议：
     - 按 cycle_life 分位数分层，每层约取 10% test、10% val、80% train。
-    - 重复 N_REPEATS 次不同随机划分，报告 R² / MAE / RMSE 的均值 ± 标准差。
-    - 训练用 train，早停用 val，最终在 test 上评估（模型为早停最优权重）。
+    - 重复 N_REPEATS 次不同随机划分，报告 R² / MAE / RMSE / MAPE 的均值±标准差。
+    - 训练用 train，早停用 val，最终在 test 上评估（早停最优权重）。
+    - 每次重复用独立 fold_generator(seed, rep) 保证可复现。
 
-  说明：可解释性分析已移至 explain_transformer.py（对 Transformer 本身做
-  Integrated Gradients / 注意力 rollout / 置换重要性），本脚本不再用随机森林
-  的 SHAP 冒充主模型解释。
+  说明：可解释性分析在 explain_transformer.py（对 Transformer 本身做
+  Integrated Gradients / 注意力 rollout / 置换重要性）。
 =============================================================================
 """
 
@@ -26,7 +26,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-g = C.seed_all(C.SEED)
+C.seed_all(C.SEED)
 PositionalEncoding, TransformerPredictor, LSTMPredictor = C.build_models()
 
 N_REPEATS = 10
@@ -58,11 +58,14 @@ def stratified_split(y, test_frac=0.1, val_frac=0.1, seed=0):
     return (np.array(train_idx), np.array(val_idx), np.array(test_idx))
 
 
-def run_one_split(tr, va, te):
-    """训练一次并返回 test 集上的 (R2, MAE, RMSE)。"""
+def run_one_split(tr, va, te, rep):
+    """训练一次并返回 test 集上的 (R2, MAE, RMSE, MAPE)。"""
     X_tr, y_tr = X_seq[tr], y_life[tr]
     X_val, y_val = X_seq[va], y_life[va]
     X_te, y_te = X_seq[te], y_life[te]
+
+    torch.manual_seed(C.SEED * 1000 + rep)          # 确定性模型初始化
+    g = C.fold_generator(C.SEED, rep)               # 独立 DataLoader 生成器
 
     X_tr_s, X_val_s = C.standardize_sequences(X_tr, X_val)
     X_te_s = C.standardize_sequences(X_tr, X_te)[1]
@@ -80,7 +83,8 @@ def run_one_split(tr, va, te):
     y_pred = y_pred_s * y_std + y_mean
     return (float(r2_score(y_te, y_pred)),
             float(mean_absolute_error(y_te, y_pred)),
-            float(np.sqrt(mean_squared_error(y_te, y_pred))))
+            float(np.sqrt(mean_squared_error(y_te, y_pred))),
+            C.mape(y_te, y_pred))
 
 
 # ============================================================
@@ -90,13 +94,13 @@ print('\n' + '=' * 60)
 print(f'留出测试集评估（{N_REPEATS} 次分层划分）')
 print('=' * 60)
 
-all_r2, all_mae, all_rmse = [], [], []
+all_r2, all_mae, all_rmse, all_mape = [], [], [], []
 for rep in range(N_REPEATS):
     tr, va, te = stratified_split(y_life, seed=C.SEED + rep)
-    r2, mae, rmse = run_one_split(tr, va, te)
-    all_r2.append(r2); all_mae.append(mae); all_rmse.append(rmse)
+    r2, mae, rmse, mape = run_one_split(tr, va, te, rep)
+    all_r2.append(r2); all_mae.append(mae); all_rmse.append(rmse); all_mape.append(mape)
     print(f'  repeat {rep+1:2d}: train={len(tr):3d} val={len(va):3d} test={len(te):3d}  '
-          f'R²={r2:.3f}  MAE={mae:.0f}  RMSE={rmse:.0f}')
+          f'R²={r2:.3f}  MAE={mae:.0f}  RMSE={rmse:.0f}  MAPE={mape:.1f}%')
 
 res = {
     'protocol': '分层留出 (10% val / 10% test / 80% train) × 重复次数',
@@ -105,6 +109,7 @@ res = {
     'R2': {'mean': float(np.mean(all_r2)), 'std': float(np.std(all_r2))},
     'MAE': {'mean': float(np.mean(all_mae)), 'std': float(np.std(all_mae))},
     'RMSE': {'mean': float(np.mean(all_rmse)), 'std': float(np.std(all_rmse))},
+    'MAPE': {'mean': float(np.mean(all_mape)), 'std': float(np.std(all_mape))},
 }
 
 print('\n' + '=' * 60)
@@ -113,6 +118,7 @@ print('=' * 60)
 print(f'  Test R²   = {res["R2"]["mean"]:.3f} ± {res["R2"]["std"]:.3f}')
 print(f'  Test MAE  = {res["MAE"]["mean"]:.0f} ± {res["MAE"]["std"]:.0f} cycles')
 print(f'  Test RMSE = {res["RMSE"]["mean"]:.0f} ± {res["RMSE"]["std"]:.0f} cycles')
+print(f'  Test MAPE = {res["MAPE"]["mean"]:.1f} ± {res["MAPE"]["std"]:.1f} %')
 
 C.save_metrics('holdout', res)
 print('\n全部完成!')
